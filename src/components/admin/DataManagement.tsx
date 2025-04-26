@@ -128,28 +128,35 @@ const DataManagement: React.FC = () => {
     reader.onload = async (event) => {
       try {
         const csvContent = event.target?.result as string;
-        const parsedData = parseCSVData(csvContent) as Student[];
+        const importedData = parseCSVData(csvContent);
         
-        if (parsedData.length === 0) {
+        if (importedData.length === 0) {
           toast.error("No valid data found in CSV file");
           return;
         }
         
-        // Insert parsed data into Supabase
-        for (const student of parsedData) {
-          await supabase.from('students').insert([{
+        // Map the imported data to match the Student interface we use here
+        for (const student of importedData) {
+          const mappedStudent = {
             name: student.name,
             class: student.class,
-            phone_number: student.phone_number || '',
-            school_name: student.school_name || '',
+            phone_number: student.phoneNumber || '',  // Map from mockData.Student.phoneNumber to our phone_number
+            school_name: student.schoolName || '',    // Map from mockData.Student.schoolName to our school_name
             state: student.state || '',
             district: student.district || ''
-          }]);
+          };
+          
+          try {
+            await supabase.from('students').insert([mappedStudent]);
+          } catch (error: any) {
+            console.error('Error inserting student:', error);
+            toast.error(`Failed to import student ${student.name}: ${error.message}`);
+          }
         }
         
         // Refresh students list
         fetchStudents();
-        toast.success(`Imported ${parsedData.length} students successfully`);
+        toast.success(`Imported ${importedData.length} students successfully`);
       } catch (error: any) {
         console.error(error);
         toast.error("Failed to parse CSV file: " + error.message);
