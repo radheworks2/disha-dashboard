@@ -1,5 +1,4 @@
-
-import React, { useState } from "react";
+import React, { useState, useEffect } from "react";
 import Navbar from "@/components/Navbar";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
@@ -31,24 +30,53 @@ import {
   Trash2, 
   Upload
 } from "lucide-react";
-import { useAuth, UserRole } from "@/contexts/AuthContext";
+import { useAuth } from "@/contexts/AuthContext";
 import { toast } from "@/components/ui/sonner";
-import { 
-  Student, 
-  mockStudents, 
-  parseCSVData 
-} from "@/utils/mockData";
+import { supabase } from "@/integrations/supabase/client";
+
+interface DbUser {
+  id: string;
+  username: string;
+  role: string;
+  created_at: string;
+}
+
+interface Student {
+  id: string;
+  name: string;
+  class: string;
+  phone_number: string;
+  school_name: string;
+  state: string;
+  district: string;
+  created_at: string;
+}
 
 const UserManagement: React.FC = () => {
   const { addUser } = useAuth();
   const [username, setUsername] = useState("");
   const [password, setPassword] = useState("");
-  const [role, setRole] = useState<UserRole>("user");
-  const [users, setUsers] = useState([
-    { id: "2", username: "user1", role: "user" },
-    { id: "3", username: "user2", role: "user" },
-  ]);
+  const [users, setUsers] = useState<DbUser[]>([]);
   const [isDialogOpen, setIsDialogOpen] = useState(false);
+
+  useEffect(() => {
+    fetchUsers();
+  }, []);
+
+  const fetchUsers = async () => {
+    try {
+      const { data, error } = await supabase
+        .from('users')
+        .select('*')
+        .eq('role', 'user');
+      
+      if (error) throw error;
+      setUsers(data || []);
+    } catch (error) {
+      console.error('Error fetching users:', error);
+      toast.error('Failed to fetch users');
+    }
+  };
 
   const handleAddUser = async () => {
     if (!username || !password) {
@@ -56,19 +84,41 @@ const UserManagement: React.FC = () => {
       return;
     }
 
-    const success = await addUser(username, password, role);
-    if (success) {
-      setUsers([...users, { id: String(users.length + 1), username, role }]);
+    try {
+      const { data, error } = await supabase
+        .from('users')
+        .insert([{ username, role: 'user' }])
+        .select()
+        .single();
+
+      if (error) throw error;
+
+      setUsers(prev => [...prev, data]);
       setUsername("");
       setPassword("");
-      setRole("user");
       setIsDialogOpen(false);
+      toast.success("User added successfully");
+    } catch (error) {
+      console.error('Error adding user:', error);
+      toast.error('Failed to add user');
     }
   };
 
-  const handleRemoveUser = (id: string) => {
-    setUsers(users.filter(user => user.id !== id));
-    toast.success("User removed successfully");
+  const handleRemoveUser = async (id: string) => {
+    try {
+      const { error } = await supabase
+        .from('users')
+        .delete()
+        .eq('id', id);
+
+      if (error) throw error;
+
+      setUsers(users.filter(user => user.id !== id));
+      toast.success("User removed successfully");
+    } catch (error) {
+      console.error('Error removing user:', error);
+      toast.error('Failed to remove user');
+    }
   };
 
   return (
@@ -168,10 +218,27 @@ const AdminManagement: React.FC = () => {
   const { addUser } = useAuth();
   const [username, setUsername] = useState("");
   const [password, setPassword] = useState("");
-  const [admins, setAdmins] = useState([
-    { id: "1", username: "admin", role: "admin" },
-  ]);
+  const [admins, setAdmins] = useState<DbUser[]>([]);
   const [isDialogOpen, setIsDialogOpen] = useState(false);
+
+  useEffect(() => {
+    fetchAdmins();
+  }, []);
+
+  const fetchAdmins = async () => {
+    try {
+      const { data, error } = await supabase
+        .from('users')
+        .select('*')
+        .eq('role', 'admin');
+      
+      if (error) throw error;
+      setAdmins(data || []);
+    } catch (error) {
+      console.error('Error fetching admins:', error);
+      toast.error('Failed to fetch admins');
+    }
+  };
 
   const handleAddAdmin = async () => {
     if (!username || !password) {
@@ -179,23 +246,46 @@ const AdminManagement: React.FC = () => {
       return;
     }
 
-    const success = await addUser(username, password, "admin");
-    if (success) {
-      setAdmins([...admins, { id: String(admins.length + 1), username, role: "admin" }]);
+    try {
+      const { data, error } = await supabase
+        .from('users')
+        .insert([{ username, role: 'admin' }])
+        .select()
+        .single();
+
+      if (error) throw error;
+
+      setAdmins(prev => [...prev, data]);
       setUsername("");
       setPassword("");
       setIsDialogOpen(false);
+      toast.success("Admin added successfully");
+    } catch (error) {
+      console.error('Error adding admin:', error);
+      toast.error('Failed to add admin');
     }
   };
 
-  const handleRemoveAdmin = (id: string) => {
+  const handleRemoveAdmin = async (id: string) => {
     if (admins.length <= 1) {
       toast.error("Cannot remove the last admin");
       return;
     }
     
-    setAdmins(admins.filter(admin => admin.id !== id));
-    toast.success("Admin removed successfully");
+    try {
+      const { error } = await supabase
+        .from('users')
+        .delete()
+        .eq('id', id);
+
+      if (error) throw error;
+
+      setAdmins(admins.filter(admin => admin.id !== id));
+      toast.success("Admin removed successfully");
+    } catch (error) {
+      console.error('Error removing admin:', error);
+      toast.error('Failed to remove admin');
+    }
   };
 
   return (
@@ -293,7 +383,7 @@ const AdminManagement: React.FC = () => {
 };
 
 const DataManagement: React.FC = () => {
-  const [students, setStudents] = useState<Student[]>(mockStudents);
+  const [students, setStudents] = useState<Student[]>([]);
   const [name, setName] = useState("");
   const [className, setClassName] = useState("");
   const [phoneNumber, setPhoneNumber] = useState("");
@@ -303,38 +393,78 @@ const DataManagement: React.FC = () => {
   const [isDialogOpen, setIsDialogOpen] = useState(false);
   const fileInputRef = React.useRef<HTMLInputElement>(null);
 
-  const handleAddStudent = () => {
+  useEffect(() => {
+    fetchStudents();
+  }, []);
+
+  const fetchStudents = async () => {
+    try {
+      const { data, error } = await supabase
+        .from('students')
+        .select('*');
+      
+      if (error) throw error;
+      setStudents(data || []);
+    } catch (error) {
+      console.error('Error fetching students:', error);
+      toast.error('Failed to fetch students');
+    }
+  };
+
+  const handleAddStudent = async () => {
     if (!name || !className || !phoneNumber || !schoolName || !state || !district) {
       toast.error("Please fill in all fields");
       return;
     }
 
-    const newStudent: Student = {
-      id: `${Date.now()}`,
-      name,
-      class: className,
-      phoneNumber,
-      schoolName,
-      state,
-      district,
-    };
+    try {
+      const { data, error } = await supabase
+        .from('students')
+        .insert([{
+          name,
+          class: className,
+          phone_number: phoneNumber,
+          school_name: schoolName,
+          state,
+          district
+        }])
+        .select()
+        .single();
 
-    setStudents([...students, newStudent]);
-    toast.success("Student added successfully");
-    
-    // Reset form
-    setName("");
-    setClassName("");
-    setPhoneNumber("");
-    setSchoolName("");
-    setState("");
-    setDistrict("");
-    setIsDialogOpen(false);
+      if (error) throw error;
+
+      setStudents(prev => [...prev, data]);
+      toast.success("Student added successfully");
+      
+      // Reset form
+      setName("");
+      setClassName("");
+      setPhoneNumber("");
+      setSchoolName("");
+      setState("");
+      setDistrict("");
+      setIsDialogOpen(false);
+    } catch (error) {
+      console.error('Error adding student:', error);
+      toast.error('Failed to add student');
+    }
   };
 
-  const handleRemoveStudent = (id: string) => {
-    setStudents(students.filter(student => student.id !== id));
-    toast.success("Student removed successfully");
+  const handleRemoveStudent = async (id: string) => {
+    try {
+      const { error } = await supabase
+        .from('students')
+        .delete()
+        .eq('id', id);
+
+      if (error) throw error;
+
+      setStudents(students.filter(student => student.id !== id));
+      toast.success("Student removed successfully");
+    } catch (error) {
+      console.error('Error removing student:', error);
+      toast.error('Failed to remove student');
+    }
   };
 
   const handleFileUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -494,8 +624,8 @@ const DataManagement: React.FC = () => {
               <TableRow key={student.id}>
                 <TableCell>{student.name}</TableCell>
                 <TableCell>{student.class}</TableCell>
-                <TableCell>{student.phoneNumber}</TableCell>
-                <TableCell>{student.schoolName}</TableCell>
+                <TableCell>{student.phone_number}</TableCell>
+                <TableCell>{student.school_name}</TableCell>
                 <TableCell>{student.state}</TableCell>
                 <TableCell>{student.district}</TableCell>
                 <TableCell className="text-right">
