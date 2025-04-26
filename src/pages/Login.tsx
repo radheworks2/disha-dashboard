@@ -6,19 +6,29 @@ import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { Label } from "@/components/ui/label";
 import Logo from "@/components/Logo";
+import { Alert, AlertDescription } from "@/components/ui/alert";
+import { AlertCircle } from "lucide-react";
 
 const Login: React.FC = () => {
   const [username, setUsername] = useState("");
   const [password, setPassword] = useState("");
   const [isLoading, setIsLoading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
   const { login } = useAuth();
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+    setError(null);
     setIsLoading(true);
     
     try {
-      await login(username, password);
+      const success = await login(username, password);
+      if (!success) {
+        setError("Invalid username or password. For testing, use the username from Supabase with password: 'password'");
+      }
+    } catch (err: any) {
+      setError(err.message || "An error occurred during login");
+      console.error("Login error:", err);
     } finally {
       setIsLoading(false);
     }
@@ -38,6 +48,13 @@ const Login: React.FC = () => {
         </CardHeader>
         <form onSubmit={handleSubmit}>
           <CardContent className="space-y-4">
+            {error && (
+              <Alert variant="destructive">
+                <AlertCircle className="h-4 w-4" />
+                <AlertDescription>{error}</AlertDescription>
+              </Alert>
+            )}
+            
             <div className="space-y-2">
               <Label htmlFor="username">Username</Label>
               <Input
@@ -59,6 +76,10 @@ const Login: React.FC = () => {
                 required
               />
             </div>
+            
+            <p className="text-sm text-gray-500">
+              <strong>Note:</strong> For testing, use any username from Supabase with the password: 'password'
+            </p>
           </CardContent>
           <CardFooter>
             <Button

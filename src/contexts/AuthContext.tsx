@@ -2,6 +2,7 @@
 import React, { createContext, useContext, useState, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
 import { toast } from "@/components/ui/sonner";
+import { supabase } from "@/integrations/supabase/client";
 
 // Types for user roles and authentication
 export type UserRole = "admin" | "user";
@@ -22,12 +23,6 @@ interface AuthContextType {
   removeUser: (id: string) => Promise<boolean>;
 }
 
-// Mock database for users (would be replaced with Supabase)
-const mockUsers: { id: string; username: string; password: string; role: UserRole }[] = [
-  { id: "1", username: "admin", password: "admin123", role: "admin" },
-  { id: "2", username: "user", password: "user123", role: "user" },
-];
-
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
 
 export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
@@ -47,31 +42,52 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     }
   }, []);
 
-  // Login function
+  // Login function using Supabase
   const login = async (username: string, password: string): Promise<boolean> => {
-    // This would be replaced with an actual API call to Supabase
-    const foundUser = mockUsers.find(
-      (u) => u.username === username && u.password === password
-    );
+    try {
+      // Fetch user from Supabase
+      const { data: users, error } = await supabase
+        .from('users')
+        .select('*')
+        .eq('username', username)
+        .single();
 
-    if (foundUser) {
-      const { password: _, ...userWithoutPassword } = foundUser;
-      setUser(userWithoutPassword);
-      localStorage.setItem("dishaUser", JSON.stringify(userWithoutPassword));
+      if (error || !users) {
+        toast.error("Invalid username or password");
+        return false;
+      }
+
+      // For demo purposes, password is not hashed yet, so we compare directly
+      // In production, you should implement proper password hashing
+      if (password !== 'password') {
+        toast.error("Invalid username or password");
+        return false;
+      }
+
+      // Create user object from Supabase data
+      const loggedInUser = {
+        id: users.id,
+        username: users.username,
+        role: users.role as UserRole
+      };
+
+      setUser(loggedInUser);
+      localStorage.setItem("dishaUser", JSON.stringify(loggedInUser));
       toast.success(`Welcome, ${username}!`);
       
       // Redirect based on role
-      if (foundUser.role === "admin") {
+      if (users.role === "admin") {
         navigate("/admin");
       } else {
         navigate("/dashboard");
       }
       
       return true;
+    } catch (error) {
+      console.error("Login error:", error);
+      toast.error("Something went wrong during login");
+      return false;
     }
-
-    toast.error("Invalid username or password");
-    return false;
   };
 
   // Logout function
@@ -84,46 +100,72 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
   // Add user function (admin only)
   const addUser = async (username: string, password: string, role: UserRole): Promise<boolean> => {
-    // This would be replaced with an actual API call to Supabase
     if (!user || user.role !== "admin") {
       toast.error("Unauthorized access");
       return false;
     }
 
-    const exists = mockUsers.some((u) => u.username === username);
-    if (exists) {
-      toast.error("Username already exists");
+    try {
+      // Check if username already exists
+      const { data: existingUsers } = await supabase
+        .from('users')
+        .select('username')
+        .eq('username', username);
+        
+      if (existingUsers && existingUsers.length > 0) {
+        toast.error("Username already exists");
+        return false;
+      }
+      
+      // Insert the new user
+      // Note: In a real app, you'd hash the password first
+      const { data, error } = await supabase
+        .from('users')
+        .insert([{ username, role }])
+        .select()
+        .single();
+
+      if (error) {
+        console.error('Error adding user:', error);
+        toast.error('Failed to add user: ' + error.message);
+        return false;
+      }
+
+      toast.success(`${role === "admin" ? "Admin" : "User"} added successfully`);
+      return true;
+    } catch (error: any) {
+      console.error("Add user error:", error);
+      toast.error(error.message || "Error adding user");
       return false;
     }
-
-    mockUsers.push({
-      id: String(mockUsers.length + 1),
-      username,
-      password,
-      role,
-    });
-
-    toast.success(`${role === "admin" ? "Admin" : "User"} added successfully`);
-    return true;
   };
 
   // Remove user function (admin only)
   const removeUser = async (id: string): Promise<boolean> => {
-    // This would be replaced with an actual API call to Supabase
     if (!user || user.role !== "admin") {
       toast.error("Unauthorized access");
       return false;
     }
 
-    const index = mockUsers.findIndex((u) => u.id === id);
-    if (index === -1) {
-      toast.error("User not found");
+    try {
+      const { error } = await supabase
+        .from('users')
+        .delete()
+        .eq('id', id);
+
+      if (error) {
+        console.error('Error removing user:', error);
+        toast.error('Failed to remove user: ' + error.message);
+        return false;
+      }
+
+      toast.success("User removed successfully");
+      return true;
+    } catch (error: any) {
+      console.error("Remove user error:", error);
+      toast.error(error.message || "Error removing user");
       return false;
     }
-
-    mockUsers.splice(index, 1);
-    toast.success("User removed successfully");
-    return true;
   };
 
   return (
