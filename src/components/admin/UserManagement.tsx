@@ -36,6 +36,7 @@ const UserManagement: React.FC = () => {
   const [password, setPassword] = useState("");
   const [users, setUsers] = useState<DbUser[]>([]);
   const [isDialogOpen, setIsDialogOpen] = useState(false);
+  const [isLoading, setIsLoading] = useState(false);
 
   useEffect(() => {
     fetchUsers();
@@ -43,6 +44,7 @@ const UserManagement: React.FC = () => {
 
   const fetchUsers = async () => {
     try {
+      setIsLoading(true);
       const { data, error } = await supabase
         .from('users')
         .select('*')
@@ -53,6 +55,8 @@ const UserManagement: React.FC = () => {
     } catch (error: any) {
       console.error('Error fetching users:', error);
       toast.error('Failed to fetch users: ' + error.message);
+    } finally {
+      setIsLoading(false);
     }
   };
 
@@ -63,13 +67,30 @@ const UserManagement: React.FC = () => {
     }
 
     try {
+      setIsLoading(true);
+      
+      // First, check if username already exists
+      const { data: existingUsers } = await supabase
+        .from('users')
+        .select('username')
+        .eq('username', username);
+        
+      if (existingUsers && existingUsers.length > 0) {
+        toast.error("Username already exists");
+        return;
+      }
+      
+      // Insert the new user
       const { data, error } = await supabase
         .from('users')
         .insert([{ username, role: 'user' }])
         .select()
         .single();
 
-      if (error) throw error;
+      if (error) {
+        console.error('Error details:', error);
+        throw error;
+      }
 
       setUsers(prev => [...prev, data]);
       setUsername("");
@@ -79,11 +100,15 @@ const UserManagement: React.FC = () => {
     } catch (error: any) {
       console.error('Error adding user:', error);
       toast.error('Failed to add user: ' + error.message);
+    } finally {
+      setIsLoading(false);
     }
   };
 
   const handleRemoveUser = async (id: string) => {
     try {
+      setIsLoading(true);
+      
       const { error } = await supabase
         .from('users')
         .delete()
@@ -96,6 +121,8 @@ const UserManagement: React.FC = () => {
     } catch (error: any) {
       console.error('Error removing user:', error);
       toast.error('Failed to remove user: ' + error.message);
+    } finally {
+      setIsLoading(false);
     }
   };
 
@@ -148,8 +175,9 @@ const UserManagement: React.FC = () => {
               <Button 
                 className="bg-disha-primary hover:bg-disha-secondary"
                 onClick={handleAddUser}
+                disabled={isLoading}
               >
-                Add User
+                {isLoading ? 'Adding...' : 'Add User'}
               </Button>
             </DialogFooter>
           </DialogContent>
@@ -157,36 +185,49 @@ const UserManagement: React.FC = () => {
       </div>
       
       <div className="border rounded-lg overflow-hidden">
-        <Table>
-          <TableHeader>
-            <TableRow>
-              <TableHead>Username</TableHead>
-              <TableHead>Role</TableHead>
-              <TableHead className="text-right">Actions</TableHead>
-            </TableRow>
-          </TableHeader>
-          <TableBody>
-            {users.map((user) => (
-              <TableRow key={user.id}>
-                <TableCell>{user.username}</TableCell>
-                <TableCell>
-                  <span className="bg-blue-100 text-blue-800 text-xs font-medium px-2.5 py-0.5 rounded">
-                    {user.role}
-                  </span>
-                </TableCell>
-                <TableCell className="text-right">
-                  <Button
-                    variant="destructive"
-                    size="sm"
-                    onClick={() => handleRemoveUser(user.id)}
-                  >
-                    <Trash2 size={16} />
-                  </Button>
-                </TableCell>
+        {isLoading && users.length === 0 ? (
+          <div className="py-8 text-center">Loading users...</div>
+        ) : (
+          <Table>
+            <TableHeader>
+              <TableRow>
+                <TableHead>Username</TableHead>
+                <TableHead>Role</TableHead>
+                <TableHead className="text-right">Actions</TableHead>
               </TableRow>
-            ))}
-          </TableBody>
-        </Table>
+            </TableHeader>
+            <TableBody>
+              {users.length === 0 ? (
+                <TableRow>
+                  <TableCell colSpan={3} className="text-center py-4">
+                    No users found
+                  </TableCell>
+                </TableRow>
+              ) : (
+                users.map((user) => (
+                  <TableRow key={user.id}>
+                    <TableCell>{user.username}</TableCell>
+                    <TableCell>
+                      <span className="bg-blue-100 text-blue-800 text-xs font-medium px-2.5 py-0.5 rounded">
+                        {user.role}
+                      </span>
+                    </TableCell>
+                    <TableCell className="text-right">
+                      <Button
+                        variant="destructive"
+                        size="sm"
+                        onClick={() => handleRemoveUser(user.id)}
+                        disabled={isLoading}
+                      >
+                        <Trash2 size={16} />
+                      </Button>
+                    </TableCell>
+                  </TableRow>
+                ))
+              )}
+            </TableBody>
+          </Table>
+        )}
       </div>
     </div>
   );
