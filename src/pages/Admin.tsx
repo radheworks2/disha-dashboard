@@ -33,6 +33,7 @@ import {
 import { useAuth } from "@/contexts/AuthContext";
 import { toast } from "@/components/ui/sonner";
 import { supabase } from "@/integrations/supabase/client";
+import { parseCSVData } from "@/utils/mockData";
 
 interface DbUser {
   id: string;
@@ -436,7 +437,6 @@ const DataManagement: React.FC = () => {
       setStudents(prev => [...prev, data]);
       toast.success("Student added successfully");
       
-      // Reset form
       setName("");
       setClassName("");
       setPhoneNumber("");
