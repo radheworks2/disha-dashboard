@@ -34,7 +34,16 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     const storedUser = localStorage.getItem("dishaUser");
     if (storedUser) {
       try {
-        setUser(JSON.parse(storedUser));
+        const parsedUser = JSON.parse(storedUser);
+        setUser(parsedUser);
+        
+        // Also set auth session with Supabase
+        supabase.auth.signInWithPassword({
+          email: `${parsedUser.username}@example.com`, // Using username as email for simplicity
+          password: 'password'
+        }).catch(err => {
+          console.error("Error refreshing Supabase session:", err);
+        });
       } catch (error) {
         console.error("Error parsing stored user:", error);
         localStorage.removeItem("dishaUser");
@@ -45,6 +54,17 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   // Login function using Supabase
   const login = async (username: string, password: string): Promise<boolean> => {
     try {
+      // First authenticate with Supabase (using username as email for simplicity)
+      const { error: authError } = await supabase.auth.signInWithPassword({
+        email: `${username}@example.com`, // Using username as email for simplicity
+        password: password
+      });
+
+      if (authError) {
+        toast.error("Invalid username or password");
+        return false;
+      }
+      
       // Fetch user from Supabase
       const { data: users, error } = await supabase
         .from('users')
@@ -53,13 +73,6 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         .single();
 
       if (error || !users) {
-        toast.error("Invalid username or password");
-        return false;
-      }
-
-      // For demo purposes, password is not hashed yet, so we compare directly
-      // In production, you should implement proper password hashing
-      if (password !== 'password') {
         toast.error("Invalid username or password");
         return false;
       }
@@ -91,7 +104,11 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   };
 
   // Logout function
-  const logout = () => {
+  const logout = async () => {
+    // Sign out from Supabase
+    await supabase.auth.signOut();
+    
+    // Clear local state
     setUser(null);
     localStorage.removeItem("dishaUser");
     toast.success("You have been logged out");
@@ -106,6 +123,18 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     }
 
     try {
+      // First create auth user in Supabase
+      const { error: authError } = await supabase.auth.signUp({
+        email: `${username}@example.com`, // Using username as email for simplicity
+        password: password
+      });
+
+      if (authError) {
+        console.error('Auth error:', authError);
+        toast.error('Failed to create user: ' + authError.message);
+        return false;
+      }
+
       // Check if username already exists
       const { data: existingUsers } = await supabase
         .from('users')
@@ -118,7 +147,6 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       }
       
       // Insert the new user
-      // Note: In a real app, you'd hash the password first
       const { data, error } = await supabase
         .from('users')
         .insert([{ username, role }])
@@ -153,11 +181,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         .delete()
         .eq('id', id);
 
-      if (error) {
-        console.error('Error removing user:', error);
-        toast.error('Failed to remove user: ' + error.message);
-        return false;
-      }
+      if (error) throw error;
 
       toast.success("User removed successfully");
       return true;
