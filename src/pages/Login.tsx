@@ -24,7 +24,7 @@ const Login: React.FC = () => {
     try {
       const success = await login(username, password);
       if (!success) {
-        setError("Invalid username or password. For testing, use the username from Supabase with password: 'password'");
+        setError("Invalid username or password");
       }
     } catch (err: any) {
       setError(err.message || "An error occurred during login");
@@ -77,9 +77,6 @@ const Login: React.FC = () => {
               />
             </div>
             
-            <p className="text-sm text-gray-500">
-              <strong>Note:</strong> For testing, use any username from Supabase with the password: 'password'
-            </p>
           </CardContent>
           <CardFooter>
             <Button
