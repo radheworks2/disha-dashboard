@@ -1,4 +1,3 @@
-
 import React, { createContext, useContext, useState, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
 import { toast } from "@/components/ui/sonner";
@@ -31,41 +30,17 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
   // Check for existing session on load
   useEffect(() => {
+    // Remove automatic login logic - only use stored session if it exists
     const storedUser = localStorage.getItem("dishaUser");
     if (storedUser) {
-      try {
-        const parsedUser = JSON.parse(storedUser);
-        setUser(parsedUser);
-        
-        // Also set auth session with Supabase
-        supabase.auth.signInWithPassword({
-          email: `${parsedUser.username}@example.com`, // Using username as email for simplicity
-          password: 'password'
-        }).catch(err => {
-          console.error("Error refreshing Supabase session:", err);
-        });
-      } catch (error) {
-        console.error("Error parsing stored user:", error);
-        localStorage.removeItem("dishaUser");
-      }
+      localStorage.removeItem("dishaUser"); // Clear any stored user data to prevent auto-login
     }
   }, []);
 
   // Login function using Supabase
   const login = async (username: string, password: string): Promise<boolean> => {
     try {
-      // First authenticate with Supabase (using username as email for simplicity)
-      const { error: authError } = await supabase.auth.signInWithPassword({
-        email: `${username}@example.com`, // Using username as email for simplicity
-        password: password
-      });
-
-      if (authError) {
-        toast.error("Invalid username or password");
-        return false;
-      }
-      
-      // Fetch user from Supabase
+      // Fetch user and password from Supabase
       const { data: users, error } = await supabase
         .from('users')
         .select('*')
@@ -73,6 +48,12 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         .single();
 
       if (error || !users) {
+        toast.error("Invalid username or password");
+        return false;
+      }
+
+      // Verify password
+      if (!users.password || users.password !== password) {
         toast.error("Invalid username or password");
         return false;
       }
@@ -96,7 +77,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       }
       
       return true;
-    } catch (error) {
+    } catch (error: any) {
       console.error("Login error:", error);
       toast.error("Something went wrong during login");
       return false;
@@ -123,18 +104,6 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     }
 
     try {
-      // First create auth user in Supabase
-      const { error: authError } = await supabase.auth.signUp({
-        email: `${username}@example.com`, // Using username as email for simplicity
-        password: password
-      });
-
-      if (authError) {
-        console.error('Auth error:', authError);
-        toast.error('Failed to create user: ' + authError.message);
-        return false;
-      }
-
       // Check if username already exists
       const { data: existingUsers } = await supabase
         .from('users')
@@ -146,24 +115,23 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         return false;
       }
       
-      // Insert the new user
+      // Insert the new user with password
       const { data, error } = await supabase
         .from('users')
-        .insert([{ username, role }])
+        .insert([{ username, password, role }])
         .select()
         .single();
 
       if (error) {
-        console.error('Error adding user:', error);
-        toast.error('Failed to add user: ' + error.message);
-        return false;
+        console.error('Error details:', error);
+        throw error;
       }
 
       toast.success(`${role === "admin" ? "Admin" : "User"} added successfully`);
       return true;
     } catch (error: any) {
-      console.error("Add user error:", error);
-      toast.error(error.message || "Error adding user");
+      console.error('Error adding user:', error);
+      toast.error('Failed to add user: ' + error.message);
       return false;
     }
   };
