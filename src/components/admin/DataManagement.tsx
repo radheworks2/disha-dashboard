@@ -90,6 +90,7 @@ const DataManagement: React.FC = () => {
       setStudents(prev => [...prev, data]);
       toast.success("Student added successfully");
       
+      // Reset form
       setName("");
       setClassName("");
       setPhoneNumber("");
